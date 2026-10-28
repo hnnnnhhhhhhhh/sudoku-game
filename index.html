@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数独游戏</title>
+<style>
+/* SECTION: base */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: #333;
+}
+
+/* SECTION: container */
+.game-container {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  padding: 30px;
+  max-width: 500px;
+  width: 100%;
+}
+
+h1 {
+  text-align: center;
+  font-size: 28px;
+  margin-bottom: 20px;
+  color: #4a4a4a;
+}
+
+/* SECTION: difficulty */
+.difficulty-panel {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  justify-content: center;
+}
+.difficulty-btn {
+  padding: 10px 24px;
+  border: 2px solid #667eea;
+  border-radius: 8px;
+  background: #fff;
+  color: #667eea;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.difficulty-btn:hover {
+  background: #f0f0ff;
+}
+.difficulty-btn.active {
+  background: #667eea;
+  color: #fff;
+}
+
+/* SECTION: status */
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 10px 16px;
+  background: #f8f8fc;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.error-count {
+  font-weight: 600;
+  color: #e74c3c;
+}
+.error-count .heart { color: #e74c3c; }
+.error-count .heart.lost { color: #ddd; }
+
+/* SECTION: board */
+.board {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 0;
+  border: 3px solid #333;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  aspect-ratio: 1;
+  width: 100%;
+}
+.cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  position: relative;
+  transition: background 0.15s;
+  user-select: none;
+}
+.cell:hover { background: #f0f4ff; }
+.cell.given {
+  background: #f5f5f5;
+  color: #333;
+  cursor: default;
+  font-weight: 700;
+}
+.cell.given:hover { background: #f5f5f5; }
+.cell.filled {
+  color: #667eea;
+  background: #eef2ff;
+}
+.cell.selected {
+  background: #d0d9ff !important;
+  box-shadow: inset 0 0 0 2px #667eea;
+}
+.cell.correct-flash {
+  animation: flashGreen 0.5s ease;
+}
+.cell.wrong-flash {
+  animation: flashRed 0.5s ease;
+}
+.cell.same-number {
+  background: #e8ecff;
+}
+
+/* 3x3 宫格粗边框 */
+.cell.box-right { border-right: 3px solid #333; }
+.cell.box-bottom { border-bottom: 3px solid #333; }
+
+@keyframes flashGreen {
+  0% { background: #d4edda; } 100% { background: inherit; }
+}
+@keyframes flashRed {
+  0% { background: #f8d7da; } 50% { background: #f5c6cb; } 100% { background: inherit; }
+}
+
+/* SECTION: numpad */
+.numpad {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.num-btn {
+  aspect-ratio: 1;
+  border: 2px solid #667eea;
+  border-radius: 8px;
+  background: #fff;
+  color: #667eea;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.num-btn:hover { background: #667eea; color: #fff; }
+.num-btn.disabled {
+  opacity: 0.3;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* SECTION: actions */
+.actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.action-btn {
+  padding: 10px 28px;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.action-btn.primary {
+  background: #667eea;
+  color: #fff;
+}
+.action-btn.primary:hover { background: #5a6fd6; }
+.action-btn.secondary {
+  background: #f0f0f5;
+  color: #555;
+}
+.action-btn.secondary:hover { background: #e4e4ed; }
+
+/* SECTION: overlay */
+.overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+.overlay.show { display: flex; }
+.modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 40px;
+  text-align: center;
+  max-width: 360px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.modal-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+.modal h2 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+.modal p {
+  color: #666;
+  margin-bottom: 24px;
+  font-size: 15px;
+}
+.modal .action-btn { margin: 0 auto; }
+
+/* SECTION: welcome */
+.welcome {
+  text-align: center;
+  padding: 40px 0;
+}
+.welcome p {
+  color: #888;
+  margin-bottom: 24px;
+  font-size: 15px;
+}
+.welcome .difficulty-panel {
+  flex-direction: column;
+  align-items: center;
+}
+.welcome .difficulty-btn {
+  width: 200px;
+  margin-bottom: 4px;
+  padding: 14px 24px;
+  font-size: 16px;
+}
+
+/* SECTION: responsive */
+@media (max-width: 480px) {
+  .game-container { padding: 16px; }
+  h1 { font-size: 22px; }
+  .cell { font-size: 16px; }
+  .num-btn { font-size: 16px; }
+  .difficulty-btn { padding: 8px 16px; font-size: 13px; }
+}
+</style>
+</head>
+<body>
+
+<div class="game-container">
+  <h1>数独游戏</h1>
+
+  <!-- SECTION: welcome-screen -->
+  <div id="welcome-screen" class="welcome">
+    <p>选择难度，开始挑战</p>
+    <div class="difficulty-panel">
+      <button class="difficulty-btn" data-primary-action onclick="startGame('easy')">🟢 简单</button>
+      <button class="difficulty-btn" data-primary-action onclick="startGame('normal')">🟡 标准</button>
+      <button class="difficulty-btn" data-primary-action onclick="startGame('hard')">🔴 困难</button>
+    </div>
+  </div>
+
+  <!-- SECTION: game-screen -->
+  <div id="game-screen" style="display:none">
+    <div class="difficulty-panel">
+      <button id="btn-easy" class="difficulty-btn" data-primary-action onclick="startGame('easy')">简单</button>
+      <button id="btn-normal" class="difficulty-btn" data-primary-action onclick="startGame('normal')">标准</button>
+      <button id="btn-hard" class="difficulty-btn" data-primary-action onclick="startGame('hard')">困难</button>
+    </div>
+
+    <div class="status-bar">
+      <span id="error-display">
+        <span class="heart" id="h1">❤️</span>
+        <span class="heart" id="h2">❤️</span>
+        <span class="heart" id="h3">❤️</span>
+        <span class="error-count"> 错误 <span id="err-num">0</span>/3</span>
+      </span>
+      <span id="progress-display">进度: <span id="prog-num">0</span>/81</span>
+    </div>
+
+    <div id="board" class="board"></div>
+
+    <div id="numpad" class="numpad"></div>
+
+    <div class="actions">
+      <button class="action-btn secondary" data-primary-action onclick="resetGame()">重新开始</button>
+      <button class="action-btn primary" data-primary-action onclick="backToWelcome()">换难度</button>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION: overlays -->
+<div id="win-overlay" class="overlay">
+  <div class="modal">
+    <div class="modal-icon">🎉</div>
+    <h2>解答成功！</h2>
+    <p id="win-msg">恭喜你完成了数独挑战！</p>
+    <button class="action-btn primary" data-primary-action onclick="backToWelcome()">再来一局</button>
+  </div>
+</div>
+
+<div id="lose-overlay" class="overlay">
+  <div class="modal">
+    <div class="modal-icon">😢</div>
+    <h2>游戏失败</h2>
+    <p>错误次数已达上限，再试一次吧！</p>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="action-btn secondary" data-primary-action onclick="resetGame()">重试本局</button>
+      <button class="action-btn primary" data-primary-action onclick="backToWelcome()">换难度</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* SECTION: sudoku-generator */
+// 数独生成与求解引擎
+const SudokuEngine = {
+  // 生成完整解
+  solve(board) {
+    const b = board.map(r => [...r]);
+    if (this._solve(b)) return b;
+    return null;
+  },
+
+  _solve(b) {
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        if (b[r][c] === 0) {
+          const nums = this._shuffle([1,2,3,4,5,6,7,8,9]);
+          for (const n of nums) {
+            if (this._isValid(b, r, c, n)) {
+              b[r][c] = n;
+              if (this._solve(b)) return true;
+              b[r][c] = 0;
+            }
+          }
+          return false;
+        }
+      }
+    }
+    return true;
+  },
+
+  _isValid(b, row, col, num) {
+    for (let i = 0; i < 9; i++) {
+      if (b[row][i] === num) return false;
+      if (b[i][col] === num) return false;
+    }
+    const br = Math.floor(row / 3) * 3, bc = Math.floor(col / 3) * 3;
+    for (let r = br; r < br + 3; r++)
+      for (let c = bc; c < bc + 3; c++)
+        if (b[r][c] === num) return false;
+    return true;
+  },
+
+  _shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  },
+
+  // 根据难度生成谜题：返回 { puzzle, solution }
+  generate(difficulty) {
+    // 1. 生成完整解
+    const empty = Array.from({length: 9}, () => Array(9).fill(0));
+    const solution = this.solve(empty);
+
+    // 2. 根据难度决定挖去数量
+    const removeCounts = { easy: 36, normal: 46, hard: 54 };
+    const toRemove = removeCounts[difficulty] || 46;
+
+    // 3. 随机挖去格子
+    const puzzle = solution.map(r => [...r]);
+    const positions = this._shuffle(
+      Array.from({length: 81}, (_, i) => [Math.floor(i / 9), i % 9])
+    );
+
+    let removed = 0;
+    for (const [r, c] of positions) {
+      if (removed >= toRemove) break;
+      const backup = puzzle[r][c];
+      puzzle[r][c] = 0;
+      // 简单验证唯一解（简化版：只检查是否仍可解）
+      if (this._countSolutions(puzzle) === 1) {
+        removed++;
+      } else {
+        puzzle[r][c] = backup;
+      }
+    }
+
+    return { puzzle, solution };
+  },
+
+  _countSolutions(b) {
+    const copy = b.map(r => [...r]);
+    let count = 0;
+    const self = this;
+    function solve() {
+      if (count > 1) return;
+      for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+          if (copy[r][c] === 0) {
+            for (let n = 1; n <= 9; n++) {
+              if (self._isValid(copy, r, c, n)) {
+                copy[r][c] = n;
+                solve();
+                copy[r][c] = 0;
+                if (count > 1) return;
+              }
+            }
+            return;
+          }
+        }
+      }
+      count++;
+    }
+    solve();
+    return count;
+  }
+};
+
+/* SECTION: game-state */
+let state = {
+  puzzle: null,
+  solution: null,
+  current: null,     // 当前棋盘状态
+  errors: 0,
+  selected: null,    // {row, col}
+  gameOver: false,
+  difficulty: null
+};
+
+/* SECTION: game-logic */
+function startGame(difficulty) {
+  state.difficulty = difficulty;
+  state.errors = 0;
+  state.gameOver = false;
+  state.selected = null;
+
+  // 生成谜题
+  const { puzzle, solution } = SudokuEngine.generate(difficulty);
+  state.puzzle = puzzle.map(r => [...r]);
+  state.solution = solution;
+  state.current = puzzle.map(r => [...r]);
+
+  // 切换界面
+  document.getElementById('welcome-screen').style.display = 'none';
+  document.getElementById('game-screen').style.display = 'block';
+
+  // 更新难度按钮高亮
+  document.querySelectorAll('#game-screen .difficulty-btn').forEach(btn => {
+    btn.classList.remove('active');
+    if (btn.id === 'btn-' + difficulty) btn.classList.add('active');
+  });
+
+  hideOverlays();
+  renderBoard();
+  renderNumpad();
+  updateStatus();
+}
+
+function resetGame() {
+  if (state.difficulty) {
+    startGame(state.difficulty);
+  }
+}
+
+function backToWelcome() {
+  document.getElementById('welcome-screen').style.display = 'block';
+  document.getElementById('game-screen').style.display = 'none';
+  hideOverlays();
+}
+
+function hideOverlays() {
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('lose-overlay').classList.remove('show');
+}
+
+/* SECTION: render */
+function renderBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 9; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+
+      // 宫格粗边框
+      if (c % 3 === 2 && c !== 8) cell.classList.add('box-right');
+      if (r % 3 === 2 && r !== 8) cell.classList.add('box-bottom');
+
+      const val = state.current[r][c];
+      const puzzleVal = state.puzzle[r][c];
+
+      if (puzzleVal !== 0) {
+        // 预设数字
+        cell.classList.add('given');
+        cell.textContent = puzzleVal;
+      } else if (val !== 0) {
+        // 玩家填入
+        cell.classList.add('filled');
+        cell.textContent = val;
+      }
+
+      // 选中高亮
+      if (state.selected && state.selected.row === r && state.selected.col === c) {
+        cell.classList.add('selected');
+      }
+
+      // 相同数字高亮
+      if (state.selected && val !== 0 && state.current[state.selected.row][state.selected.col] === val) {
+        cell.classList.add('same-number');
+      }
+
+      cell.dataset.row = r;
+      cell.dataset.col = c;
+      cell.addEventListener('click', () => onCellClick(r, c));
+      board.appendChild(cell);
+    }
+  }
+}
+
+function renderNumpad() {
+  const numpad = document.getElementById('numpad');
+  numpad.innerHTML = '';
+
+  // 统计每个数字已填入次数
+  const counts = Array(10).fill(0);
+  for (let r = 0; r < 9; r++)
+    for (let c = 0; c < 9; c++)
+      if (state.current[r][c] !== 0) counts[state.current[r][c]]++;
+
+  for (let n = 1; n <= 9; n++) {
+    const btn = document.createElement('button');
+    btn.className = 'num-btn';
+    btn.textContent = n;
+    if (counts[n] >= 9) btn.classList.add('disabled');
+    btn.addEventListener('click', () => onNumSelect(n));
+    numpad.appendChild(btn);
+  }
+}
+
+function updateStatus() {
+  // 错误计数
+  document.getElementById('err-num').textContent = state.errors;
+  for (let i = 1; i <= 3; i++) {
+    const h = document.getElementById('h' + i);
+    h.classList.toggle('lost', i <= state.errors);
+    h.textContent = i <= state.errors ? '🤍' : '❤️';
+  }
+
+  // 进度
+  let filled = 0;
+  for (let r = 0; r < 9; r++)
+    for (let c = 0; c < 9; c++)
+      if (state.current[r][c] !== 0) filled++;
+  document.getElementById('prog-num').textContent = filled;
+}
+
+/* SECTION: interaction */
+function onCellClick(row, col) {
+  if (state.gameOver) return;
+  if (state.puzzle[row][col] !== 0) return; // 预设格不可选
+
+  state.selected = { row, col };
+  renderBoard();
+}
+
+function onNumSelect(num) {
+  if (state.gameOver || !state.selected) return;
+  const { row, col } = state.selected;
+  if (state.puzzle[row][col] !== 0) return;
+
+  const correct = state.solution[row][col];
+  state.current[row][col] = num;
+
+  if (num === correct) {
+    // 正确
+    renderBoard();
+    const cells = document.querySelectorAll('.cell');
+    const idx = row * 9 + col;
+    cells[idx].classList.add('correct-flash');
+    updateStatus();
+    renderNumpad();
+
+    // 检查是否完成
+    if (checkWin()) {
+      state.gameOver = true;
+      setTimeout(() => {
+        const diffNames = { easy: '简单', normal: '标准', hard: '困难' };
+        document.getElementById('win-msg').textContent =
+          `你在「${diffNames[state.difficulty]}」难度下完成了数独挑战！`;
+        document.getElementById('win-overlay').classList.add('show');
+      }, 400);
+    }
+  } else {
+    // 错误
+    state.errors++;
+    state.current[row][col] = 0; // 错误数字不保留
+    renderBoard();
+    const cells = document.querySelectorAll('.cell');
+    const idx = row * 9 + col;
+    cells[idx].classList.add('wrong-flash');
+    updateStatus();
+
+    if (state.errors >= 3) {
+      state.gameOver = true;
+      setTimeout(() => {
+        document.getElementById('lose-overlay').classList.add('show');
+      }, 600);
+    }
+  }
+
+  state.selected = null;
+}
+
+function checkWin() {
+  for (let r = 0; r < 9; r++)
+    for (let c = 0; c < 9; c++)
+      if (state.current[r][c] !== state.solution[r][c]) return false;
+  return true;
+}
+
+/* SECTION: keyboard */
+document.addEventListener('keydown', (e) => {
+  if (state.gameOver) return;
+  const key = parseInt(e.key);
+  if (key >= 1 && key <= 9) {
+    onNumSelect(key);
+  }
+  // 方向键移动选中格
+  if (state.selected && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+    e.preventDefault();
+    let { row, col } = state.selected;
+    if (e.key === 'ArrowUp') row = (row + 8) % 9;
+    if (e.key === 'ArrowDown') row = (row + 1) % 9;
+    if (e.key === 'ArrowLeft') col = (col + 8) % 9;
+    if (e.key === 'ArrowRight') col = (col + 1) % 9;
+    state.selected = { row, col };
+    renderBoard();
+  }
+  // 退格清除
+  if (e.key === 'Backspace' || e.key === 'Delete') {
+    if (state.selected && state.puzzle[state.selected.row][state.selected.col] === 0) {
+      state.current[state.selected.row][state.selected.col] = 0;
+      renderBoard();
+      renderNumpad();
+      updateStatus();
+    }
+  }
+});
+</script>
+</body>
+</html>
